@@ -41,7 +41,7 @@ void usart2_init(void) {
 	USART2->CR1 &= ~(1<<28 | USART_CR1_OVER8 | USART_CR1_PCE); //set to 8 bit, 16x samp., parity off
 	USART2->CR2 &= ~(USART_CR2_STOP); //1 stop bit
 	//USART1->BRR = 20000; //0x4e20
-	USART2->BRR = 0x4e20;
+	USART2->BRR = 48000000/9600;
 
 	//enables
 	USART2->CR1 |= USART_CR1_RE | USART_CR1_TE |USART_CR1_UE;
@@ -57,7 +57,8 @@ void swrite(char c) {
 
 char sread(void) {
 	while((USART2->ISR & USART_ISR_RXNE) != USART_ISR_RXNE); //wait until equal
-	return (char) USART2->RDR;
+	char c = USART2->RDR;
+	return c;
 }
 
 int main(void)

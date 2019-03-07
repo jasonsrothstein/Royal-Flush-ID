@@ -319,6 +319,43 @@ void lcd_init() {
 
 }
 
+void gpio_pulse() {
+	GPIOA->ODR |= 1<<2;
+	nano_wait(1*1000*1000);
+	GPIOA->ODR &= ~(1<<2);
+	nano_wait(1*1000*1000);
+}
+void gpio_send(char c, char mode) {
+	GPIOA->ODR = mode;
+	GPIOA->ODR |= (c&0xF0);
+	nano_wait(1*1000*1000);
+	gpio_pulse();
+	GPIOA->ODR = mode;
+	GPIOA->ODR |= (c&0x0F) << 4; //lower 4 bits
+	nano_wait(1*1000*1000);
+	gpio_pulse();
+}
+
+void lcd_init_gpio() {
+	RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
+	GPIOA->MODER |= 0x5555;
+	GPIOA->ODR = 0;
+	gpio_send(0x30, 0x0);
+	gpio_send(0x30,0x0);
+	gpio_send(0x20,0x0);
+	gpio_send(LCD_FUNCTIONSET | _DISP_FUNC,0x0);
+	gpio_send(LCD_DISPLAYCONTROL | _DISP_CONT,0x0);
+	gpio_send(LCD_CLEARDISPLAY,0x0);
+	nano_wait(2000*1000);
+	//_BACKLIGHT = LCD_NOBACKLIGHT;
+	gpio_send(LCD_ENTRYMODESET | _DISP_MODE, 0x0);
+	gpio_send(LCD_RETURNHOME,0x0);
+	nano_wait(1*1000*1000);
+}
+void gpio_test() {
+	gpio_send(LCD_SETDDRAMADDR |0x40, 0x0); //set cursor
+	gpio_send('a', 0x1);
+}
 
 //===========================================================================
 // The main() function.

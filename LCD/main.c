@@ -268,7 +268,7 @@ void command(char cmd) {
 	send(cmd, 0);
 }
 
-void display(char* s, int line, int col) {
+void display( int line, int col, char* s) {
 	//set cursor
 	line -= 1; //set to 1st entry at 0
 	uint8_t ROW_OFFSET[] = {0x00,0x40,0x14,0x54};
@@ -282,14 +282,57 @@ void display(char* s, int line, int col) {
 	//uint8_t _4bit[2*len];
 	if(len > 20) len = 20;
 	for(int i = 0; i < len; i++) {
-		//_4bit[2*i] = (s[i]&0xF0) | Rs| _BACKLIGHT |En; //upper 4
-		//_4bit[2*i+1] = ((s[i]&0x0F)<<4) | Rs| _BACKLIGHT | En; //lower 4
 		//here, Rs denotes "register select"
 		send(s[i], Rs);
 	}
-	//i2c_senddata(TARGET_ADDR, _4bit, 2*len);
 }
 
+void display(int line, char* s, char mode) {
+	//mode can be center 'c', left 'l', right 'r'
+
+	//clear entire line
+	display(line, "                    ", 'l');
+
+	int size;
+	for(size = 0; s[size] != '\0'; size++);
+	if(size > 20) {
+		size = 20;
+	}
+
+	int col;
+	switch(mode) {
+		case 'c':
+			col = ((20 - size)/2);
+			break;
+		case 'r':
+			col = (20-size);
+			break;
+		default:
+			col = 0; //left default
+		break;
+	}
+	//set cursor
+	line -= 1; //set to 1st entry at 0
+	uint8_t ROW_OFFSET[] = {0x00,0x40,0x14,0x54};
+	if(line > 3) line = 3;
+	if(line < 0) line = 0;
+	command(LCD_SETDDRAMADDR | (col + ROW_OFFSET[line]));
+
+	//send data
+	int len;
+	for(len = 0; s[len] != '\0'; ++len); //set length
+	//uint8_t _4bit[2*len];
+	if(len > 20) len = 20;
+	for(int i = 0; i < len; i++) {
+		//here, Rs denotes "register select"
+		send(s[i], Rs);
+	}
+}
+
+void clear_display() {
+	command(LCD_CLEARDISPLAY);
+	nano_wait(2000*1000);
+}
 void lcd_init() {
 	i2c_init();
 	nano_wait(50*1000*1000);
@@ -319,66 +362,9 @@ void lcd_init() {
 
 }
 
-void gpio_pulse() {
-	GPIOA->ODR |= 1<<2;
-	nano_wait(1*1000*1000);
-	GPIOA->ODR &= ~(1<<2);
-	nano_wait(1*1000*1000);
-}
-void gpio_send(char c, char mode) {
-	GPIOA->ODR = mode;
-	GPIOA->ODR |= (c&0xF0);
-	nano_wait(1*1000*1000);
-	gpio_pulse();
-	GPIOA->ODR = mode;
-	GPIOA->ODR |= (c&0x0F) << 4; //lower 4 bits
-	nano_wait(1*1000*1000);
-	gpio_pulse();
-}
-
-void lcd_init_gpio() {
-	RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
-	GPIOA->MODER |= 0x5555;
-	GPIOA->ODR = 0;
-	gpio_send(0x30, 0x0);
-	gpio_send(0x30,0x0);
-	gpio_send(0x20,0x0);
-	gpio_send(LCD_FUNCTIONSET | _DISP_FUNC,0x0);
-	gpio_send(LCD_DISPLAYCONTROL | _DISP_CONT,0x0);
-	gpio_send(LCD_CLEARDISPLAY,0x0);
-	nano_wait(2000*1000);
-	//_BACKLIGHT = LCD_NOBACKLIGHT;
-	gpio_send(LCD_ENTRYMODESET | _DISP_MODE, 0x0);
-	gpio_send(LCD_RETURNHOME,0x0);
-	nano_wait(1*1000*1000);
-}
-void gpio_test() {
-	gpio_send(LCD_SETDDRAMADDR |0x40, 0x0); //set cursor
-	gpio_send('a', 0x1);
-}
-
 //===========================================================================
 // The main() function.
 int main(void)
 {
-    lcd_init();
-    display("Hello World", 1, 0);
-    display("It took over 16 hrs,", 2, 0);
-    display("But now it works.", 3, 0);
-    display("BAM!", 4, 8);
 
-    for(;;) {
-
-    	/*
- *This block blinks the backlight on and off
-    	_DISP_CONT |= LCD_DISPLAYON;
-    	_BACKLIGHT = LCD_BACKLIGHT;
-    	command(LCD_DISPLAYCONTROL | _DISP_CONT); //screen on
-    	nano_wait(1*1000*1000*1000);
-    	_DISP_CONT &= ~LCD_DISPLAYON;
-
-    	command(LCD_DISPLAYCONTROL | _DISP_CONT); //screen off
-    	nano_wait(1*1000*1000*1000);
-    	*/
-    }
 }

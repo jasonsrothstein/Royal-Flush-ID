@@ -101,18 +101,19 @@ void led(int pin, int mode) {
 
 }
 
+
+
 void TIM2_IRQHandler() {
 	//check TIM2->SR CCXIF flag to determine source
 
     if(TIM2->SR & TIM_SR_CC1IF) {
-    	if(TIM1->CCR1 == 0) {
-    		led(1,0);
-    	} else {
-    		led(1,1);
-    	}
+
     }
     else if(TIM2->SR & TIM_SR_CC2IF) {
-    	led(1,2);
+    	led(1,1);
+    	xbee_send('c');
+    	nano_wait(1000*1000*500); //half second
+    	led(1,0);
     }
     int fake;
     fake = TIM2->CCR1;
@@ -126,18 +127,26 @@ int main(void) {
 
        lcd_init();
        //init_loadcell();
-       //init_rfid();
-       //init_xbee();
+       initRFID();
+       xbee_init();
        init_led();
        init_btns();
        led(2, 2); //to confirm micro is working
        //display(2, "SYSTEM TEST", 'c');
-       displayX(2, 5,"Test");
+       display(1,"RFID Test", 'c');
+       display(2, "Suit: ", 'l');
+       display(3, "Value: ", 'l');
        for(;;) {
-    	   asm("wfi");
+    	   char v = getCard();
+    	   char c[2];
+    	   c[1] = '\0';
+    	   c[0] ='0' + (v%4);
+    	   displayX(2,6, c);
+    	   c[0] = '0' + (v/4);
+    	   displayX(3, 7, c);
+    	   //asm("wfi");
        }
-       //int i = 0;
-
-      //
 }
+
+
 

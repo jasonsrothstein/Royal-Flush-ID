@@ -397,10 +397,3 @@ char receiveSignal(char address) {
 	return(data);
 }
 
-void nano_wait(int t) {
-	asm("       mov r0,%0\n"
-			"repeat:\n"
-			"       sub r0,#83\n"
-			"       bgt repeat\n"
-			: : "r"(t) : "r0", "cc");
-}

@@ -82,3 +82,36 @@ void TIM1_CC_IRQHandler() {
 	xbee_send(COUNT);
 	TIM1->SR &= ~TIM_SR_UIF;
 }
+
+int main(void) {
+
+       lcd_init();
+       //init_loadcell();
+       //initRFID();
+       xbee_init();
+       init_led();
+       init_btns();
+       led(2, 2); //to confirm micro is working
+       //display(2, "SYSTEM TEST", 'c');
+       display(1,"PM Test", 'c');
+       display(2, "Button Count: ", 'l');
+       display(3, "Xbee Char: ", "l");
+       char btns[] = "Button Count: 0 ";
+
+       for(;;) {
+    	   //char v = getCard();
+    	   char c[2];
+    	   led(1,1);
+    	   c[1] = '\0';
+    	   c[0] = xbee_read();
+    	   displayX(3, 11, c);
+    	   sprintf(btns, "Button Count: %d", COUNT);
+
+    	   display(2, btns, 'l');
+
+    	   //asm("wfi");
+       }
+       //int i = 0;
+
+      //
+}

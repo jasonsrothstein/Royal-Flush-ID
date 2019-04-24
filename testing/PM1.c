@@ -10,7 +10,9 @@ int BANK = 0;
 int BET = 0;
 int POT = 0;
 int CALL = 0;
-int COMBO[6] = {0,0,0,0,0,0};
+int COMBO[6] = {5,0,0,0,0,0};
+int STATUS = 0;
+int STR = 0;
 
 void nano_wait(int t) {
     asm("       mov r0,%0\n"
@@ -80,51 +82,59 @@ void led(int pin, int state) {
 	}
 }
 
-static uint8_t COUNT = 0;
+
 void TIM2_IRQHandler() {
 	//check TIM2->SR CCXIF flag to determine source
 
     if(TIM2->SR & TIM_SR_CC1IF) {
-    	led(2,2);
+    	//BTN 2
+    	//fold
+    	if(STATUS == 6) {
+    		STATUS = 0;
+    		xbee_send(0, 4, &STATUS, 1);
+    		update_display();
+    		led(1,0);
+    		led(3,0);
+    	}
+
     }
     else if(TIM2->SR & TIM_SR_CC2IF) {
-    	led(1,2);
+    	//BTN 1
+    	//pass
+    	if(STATUS == 6) {
+    		STATUS = 1;
+    		xbee_send(0, 4, &STATUS, 1);
+    		led(3,0);
+    		led(1,1);
+    	}
     }
     int fake;
     fake = TIM2->CCR1;
     fake = TIM2->CCR2;
-
-	COUNT++;
-	//xbee_send(COUNT);
-    //do function
     TIM2->SR &= ~TIM_SR_UIF;
 }
 void TIM1_CC_IRQHandler() {
-	int fake;
-	fake = TIM1->CCR4;
+
 	SCREEN += 1;
 	if(SCREEN > 1) {
 		SCREEN = 0;
 	}
 	clear_display();
 	update_display();
+
+	int fake;
+	fake = TIM1->CCR4;
 	TIM1->SR &= ~TIM_SR_UIF;
 }
 
 int read_int(void) {
 	int rv = 0;
-	int j=0;
+	int j;
 	int shift = 0;
-	while(j<(2*4)) {
-		char c = xbee_read();
-		if(MY_ADDR == ((c>>4)&0xF)) {
-			int val = c&0xF;
-			rv += (val)<<shift;
-			shift += 4;
-			j++;
-		} else {
-			//throw error?
-		}
+	for(j=0; j<(2*4); j++) {
+		int val = (int) xbee_readH(MY_ADDR);
+		rv += (val)<<shift;
+		shift += 4;
 	}
 	return rv;
 }
@@ -137,12 +147,28 @@ int update_display() {
 		display(4, "Bank: ", 'l');
 
 		char num[7];
-		sprintf(num, "%d", POT);
-		displayX(1, 5, num);
+		if(STATUS == 4) {
+			clear_line(1);
+			display(1,"LITTLE BLIND", 'l');
+		} else if(STATUS == 5) {
+			clear_line(1);
+			display(1,"BIG BLIND", 'l');
+		} else {
+			sprintf(num, "%d", POT);
+			displayX(1, 5, num);
+		}
+
 		sprintf(num, "%d", CALL);
 		displayX(2, 6, num);
-		sprintf(num, "%d", BET);
-		displayX(3, 5, num);
+		if(STATUS == 0) {
+			displayX(3,5,"FOLD");
+		} else {
+			sprintf(num, "%d", BET);
+			displayX(3, 5, num);
+		}
+		if(STATUS == -1) {
+			displayX(4, 6, "BUST    ");
+		}
 		sprintf(num, "%d", BANK);
 		displayX(4, 6, num);
 	}
@@ -187,10 +213,24 @@ int update_display() {
 
 
 		display(2, "STRENGTH: ", 'l');
+		int i;
+		char block[2];
+		block[0] = 0b00101010;
+		block[1] = '\0';
+		for(i = 0; i < STR; i++) {
+			displayX(2, 10+i, &block);
+		}
+		block[0] = ' ';
+		for(i = 0; i < (10-STR); i++) {
+			displayX(2, 10+STR+i, &block);
+		}
 		display(3, "POT ODDS: ", 'l');
 		//char num[7];
 		//sprintf(num, "%.2f", (double) POT / (double) (CALL-BET));
 
+
+		//ind. load cells screen?
+		//table stats
 	}
 }
 
@@ -203,12 +243,14 @@ int main(void) {
        init_btns();
 
        led(1,1);
-
+       displayX(1,1,"Test");
        int net_status = 0;
-       char hand[7] = {0,0,0,0,0,0,0};
+       int hand[7] = {5,0,0,0,0,0,0};
        int h_index = 0;
-       update_display();
+       STR = 7;
 
+       STATUS = 1; //auto join game
+       update_display();
 
 
    	while(1) {
@@ -223,14 +265,33 @@ int main(void) {
 
    			} else if(cmd == 3) { //new game
    				//import all game settings
+   				BANK = read_int();
+   				//only need bank
+   				POT = 0;
+   				CALL = 0;
+   				BET = 0;
 
    			} else if(cmd == 4) { //status update
-   				//talk to brian about what status is what
+   				STATUS = (int) (xbee_readH(MY_ADDR));
+   				if(STATUS == 3) {
+   					led(2,1);
+   				} else if((STATUS >= 4) & (STATUS <= 6)) {
+   					led(1,0);
+   					led(3,1);
+   				}
+   				update_display();
 
    			} else if(cmd == 5) { //new card
-   				hand[h_index] = xbee_read();
+   				hand[h_index] = read_int();
    				h_index++;
-   				//hand eval?
+   				if(h_index == 5) {
+   					//STR = getHandStrength5Cards(hand);
+   				} else if(h_index ==6) {
+   					//STR = getHandStrength6Cards(hand);
+   				} else if(h_index ==7) {
+   					//STR = getHandStrength7Cards(hand);
+   				}
+   				update_display();
    			} else if(cmd == 6) { //pot update
    				POT = read_int();
    				update_display();
@@ -251,6 +312,15 @@ int main(void) {
    				BET = 0;
    				POT = 0;
    				CALL = 0;
+   				for(int i = 0; i < 7; i++) {
+   					hand[i] = 0;
+   				}
+   				for(int i=0; i<6;i++) {
+   					COMBO[i] = 0;
+   				}
+   				STR = 0;
+   				h_index = 0;
+
    				update_display();
    			} else if(cmd == 13) { //open network
 

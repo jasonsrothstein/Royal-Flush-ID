@@ -12,9 +12,12 @@
 
 void initLoadCell(void);
 int convert2s(int count);
-int weigh(void);
-void zero(void);
-int getChips(void);
-int TESTfindAvg(void);
+int weigh(int scale);
+void zero(int scale);
+int getChips(int scale);
+void getChipWeight(int scale);
+int findAvg(int scale);
+int weigh3(void);
 
-int offset;
+int offset[3];
+int chipWeight[3];

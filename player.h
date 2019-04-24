@@ -10,18 +10,22 @@
 
 #endif /* PLAYER_H_ */
 
-int getHandStrengthC(char * cards);
-int getHandStrengthB(char * cards);
-int getHandStrength(char * cards);
-int bestHand(char * cards);
-int checkRoyalFlush(char * cards);
-int checkStraightFlush(char * cards);
-int checkFourOfAKind(char * cards);
-int checkFullHouse(char * cards);
-int checkFlush(char * cards);
-int checkStraight(char * cards);
-int checkThreeOfAKind(char * cards);
-int checkTwoPair(char * cards);
-int checkPair(char * cards);
-void sortCards(char * cards);
+int getHandStrength5Cards(char * cards);
+int getHandStrength6Cards(char * cards);
+int getHandStrength7Cards(char * cards, int makeHand);
+int bestHand(char * cards, int makeHand);
+int checkRoyalFlush(char * cards, int makeHand);
+int checkStraightFlush(char * cards, int makeHand);
+int checkFourOfAKind(char * cards, int makeHand);
+int checkFullHouse(char * cards, int makeHand);
+int checkFlush(char * cards, int makeHand);
+int checkStraight(char * cards, int makeHand);
+int checkThreeOfAKind(char * cards, int makeHand);
+int checkTwoPair(char * cards, int makeHand);
+int checkPair(char * cards, int makeHand);
+void sortCardsLtoG(char * cards);
+void sortCardsGtoL(char * cards);
 
+char hand[7];
+char fiveCardHand[5];
+int currentHand;

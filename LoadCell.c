@@ -11,42 +11,60 @@
 #include "LoadCell.h"
 #include "rfid.h"
 
-int weigh(void) {
-	initLoadCell();
+// Scale is 0, 1, or 2 and represents the physical load cell you wish to access
+int weigh(int scale) {
 	unsigned int count;
-	unsigned int complement;
-	while(1) {
-		count = 0;
-		complement = 0;
-		for (int n = 0; n < 24; n++) {
-			while((GPIOA->IDR & GPIO_IDR_1) == 1);
-			GPIOA->ODR |= GPIO_ODR_0;
-			count = count << 1;
-			complement = complement << 1;
-			nano_wait(40000);
-			GPIOA->ODR &= ~GPIO_ODR_0;
-			if (GPIOA->IDR & GPIO_IDR_1) {
-				count++;
-			} else {
-				complement++;
-			}
-			nano_wait(40000);
-
+	count = 0;
+	for (int n = 0; n < 24; n++) {
+		//while((GPIOB->IDR & (1 << (scale * 2))) == 1);
+		GPIOB->ODR |= (2 << (scale * 2));
+		count = count << 1;
+		nano_wait(40000);
+		GPIOB->ODR &= ~(2 << (scale * 2));
+		if (GPIOB->IDR & (1 << (scale * 2))) {
+			count++;
 		}
-		GPIOA->ODR |= GPIO_ODR_0;
 		nano_wait(40000);
-		GPIOA->ODR &= ~GPIO_ODR_0;
-		nano_wait(40000);
-
-		int weight;
-		weight = complement + 1;
-		weight = convert2s(count);
-		nano_wait(500000);
-		return(weight);
 	}
+	GPIOB->ODR |= (2 << (scale * 2));
+	nano_wait(40000);
+	GPIOB->ODR &= ~(2 << (scale * 2));
+	nano_wait(40000);
+
+	nano_wait(100000000);
+
+	return(convert2s(count));
 }
 
+
+int weigh3(void) {
+	initLoadCell();
+	unsigned int count;
+	count = 0;
+	for (int n = 0; n < 24; n++) {
+		while((GPIOB->IDR & GPIO_IDR_4) == 1);
+		GPIOB->ODR |= GPIO_ODR_5;
+		count = count << 1;
+		nano_wait(40000);
+		GPIOB->ODR &= ~GPIO_ODR_5;
+		if (GPIOB->IDR & GPIO_IDR_4) {
+			count++;
+		}
+		nano_wait(40000);
+
+	}
+	GPIOB->ODR |= GPIO_ODR_5;
+	nano_wait(40000);
+	GPIOB->ODR &= ~GPIO_ODR_5;
+	nano_wait(40000);
+
+	nano_wait(100000000);
+	return(convert2s(count));
+}
+
+
 void initLoadCell(void) {
+	/*
 	RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
 	GPIOA->MODER &= ~GPIO_MODER_MODER0;
 	GPIOA->MODER |= GPIO_MODER_MODER0_0;	// OUTPUT MODE
@@ -54,37 +72,55 @@ void initLoadCell(void) {
 	GPIOA->PUPDR |= GPIO_PUPDR_PUPDR0_1;	// PULL DOWN
 
 	GPIOA->MODER &= ~GPIO_MODER_MODER1;		// INPUT MODE
+	*/
+
+	RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
+	GPIOB->MODER &= ~(GPIO_MODER_MODER1 | GPIO_MODER_MODER3 | GPIO_MODER_MODER5);
+	GPIOB->MODER |= GPIO_MODER_MODER1_0 | GPIO_MODER_MODER3_0 | GPIO_MODER_MODER5_0;	// OUTPUT MODE
+	GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPDR1 | GPIO_PUPDR_PUPDR3 | GPIO_PUPDR_PUPDR5);
+	GPIOB->PUPDR |= GPIO_PUPDR_PUPDR1_1 | GPIO_PUPDR_PUPDR3_1 | GPIO_PUPDR_PUPDR5_1;	// PULL DOWN
+
+	GPIOB->MODER &= ~(GPIO_MODER_MODER0 | GPIO_MODER_MODER2 | GPIO_MODER_MODER4);		// INPUT MODE
 }
 
 int convert2s(int count) {
 	int dec = ~count;
-	for(int n = 0; n < 8; n++) {
-		dec = dec << 1;
-	}
-	for(int n = 0; n < 8; n++) {
-		dec = dec >> 1;
-	}
+	dec &= (0xFFFFFF);
 	dec++;
+	if (dec > 500000) {
+		return(count * -1);
+	}
 	return(dec);
 }
 
-void zero(void) {
-	offset = weigh();
-}
-
-int getChips(void) {
-	int weight = weigh() - offset;
-	// Else if for weight then chips
-	return(weight);
-}
-
-int TESTfindAvg(void) {
-	int average = 0;
+void zero(int scale) {
 	int sum = 0;
-	while (1) {
-		for (int i = 0; i < 10000; i++) {
-			sum += getChips();
-		}
-		average = sum / 10000;
+	for (int i = 0; i < 5; i++) {
+		weigh(scale);
 	}
+	nano_wait(100000000);
+	for (int i = 0; i < 5; i++) {
+		sum += weigh(scale);
+	}
+	offset[scale] = sum / 5;
+}
+
+int getChips(int scale) {
+	int total = findAvg(scale) + (chipWeight[scale] / 2);
+	return (total / chipWeight[scale]);
+	// Else if for weight then chips
+}
+
+void getChipWeight(int scale) {
+	chipWeight[scale] = findAvg(scale) / 10;
+}
+
+int findAvg(int scale) {
+	int average;
+	int sum = 0;
+	for (int i = 0; i < 5; i++) {
+		sum += weigh(scale) - offset[scale];
+	}
+	average = sum / 5;
+	return(average);
 }

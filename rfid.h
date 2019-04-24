@@ -14,7 +14,7 @@ void initSPI(void);
 void initRFID(void);
 void sendSignal(char address, char signal);
 char receiveSignal(char address);
-void selfTest(void);
+int selfTest(void);
 void FIFOcheck(void);
 char scan4tag(void);
 char getCard(void);

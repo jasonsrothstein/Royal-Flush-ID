@@ -16,6 +16,7 @@ typedef struct {
 	char gameStatus;	// -1 - Bankrupt   0 - Folded   1 - Active 	2 - All In
 	char address;		// The address that the XBEE chip in the player module will respond to
 	int handStrength;	// The strength of the player hand
+	char hand[5];		// Player hand
 } player;
 
 typedef struct {
@@ -33,8 +34,11 @@ void roundReset(void);
 int getStartHoldings(void);
 void bet(int start, int playerTurn);
 int getBet(void);
-void deal(void);
+void dealHands(void);
+void dealToTable(char numCards);
 void XBEEsend(int address, int data);
 void dealHands(void);
 void resolveHand(void);
+int tieBreaker(int player1, int player2, int * ties);
+void tieHandler(int player1, int player2, int * ties);
 

@@ -1,0 +1,107 @@
+void TIM2_IRQHandler() {
+	//check TIM2->SR CCXIF flag to determine source
+
+    if(TIM2->SR & TIM_SR_CC1IF) {
+    	led(2,2);
+    }
+    else if(TIM2->SR & TIM_SR_CC2IF) {
+    	//btn 1
+    	led(1,2);
+    	char card = getCard();
+    	xbee_sendX(card);
+    	led(1,2);
+/*
+    	int suit = card % 4;
+    	int val = card /4;
+    	char num[3];
+    	num[2] ='\0';
+    	num[1] = ' ';
+    	if(suit == 0) {
+    		num[0] = 'C';
+    	}else if(suit ==1) num[0] = 'D';
+    	else if(suit==2) num[0] = 'H';
+    	else if(suit ==3) num[0] = 'S';
+    	//displayX(3, 6, num);
+
+    	if(val == 10) {num[0] = '1'; num[1] = '0'; num[2] = '\0';}
+    	else if(val ==11) num[0] = 'J';
+    	else if(val == 12) num[0] = 'Q';
+    	else if(val == 13) num[0] = 'K';
+    	else if(val == 14) num[0] = 'A';
+    	else {
+    		num[0] = '0' + val;
+    	}
+    	//displayX(4, 7, num);
+
+    	 */
+    }
+    int fake;
+    fake = TIM2->CCR1;
+    fake = TIM2->CCR2;
+
+    //do function
+    TIM2->SR &= ~TIM_SR_UIF;
+}
+void TIM1_CC_IRQHandler() {
+	int fake;
+	fake = TIM1->CCR4;
+
+	TIM1->SR &= ~TIM_SR_UIF;
+}
+
+
+int main(void) {
+
+
+	lcd_init();
+    initLoadCell();
+    	//initRFID();
+       xbee_init();
+       init_led();
+       init_btns();
+       led(2, 2); //to confirm micro is working
+       //display(2, "SYSTEM TEST", 'c');
+
+       //zero(1);
+       //zero(2);
+       zero(0);
+       display(1, "Callibrate in 10 sec",'l');
+       for(int i = 0; i < 10; i++) {
+       nano_wait(1000*1000*1000);
+       }
+       getChipWeight(0);
+      // getChipWeight(1);
+     //  getChipWeight(2);
+
+       clear_line(1);
+
+     //  display(1,"CH Test", 'c');
+       display(2, "Bet: ", 'l');
+     //  display(3, "Suit: ", "l");
+     //  display(4, "Value: ", 'l');
+
+       for(;;) {
+    	   //char v = getCard();
+    	   //char c[2];
+
+    	  // c[1] = '\0';
+    	  // c[0] = xbee_read();
+    	  // displayX(3, 11, c);
+    	  // sprintf(btns, "Button Count: %d", COUNT);
+
+    	 //  display(2, btns, 'l');
+
+    	   int bet = getChips(0);// + 5*getChips(1) + 10*getChips(2);
+    	   char num[7];
+    	   sprintf(num, "%4d", bet);
+    	   displayX(2, 5, num);
+    	   //asm("wfi");
+
+
+
+
+       }
+       //int i = 0;
+
+      //
+}

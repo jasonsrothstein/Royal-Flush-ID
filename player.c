@@ -3,8 +3,34 @@
 #include "stm32f0_discovery.h"
 #include <stdlib.h>
 #include "player.h"
+#include <math.h>
+
+int getHandStrength2Cards(char * cards) {
+	double strength = 0;
+	if ((cards[0] / 4) == (cards[1] / 4)) {
+		strength += 3.0 * cbrt((((cards[0] / 4) + (cards[1] / 4)) / 19.0));
+		currentHand = 2;
+	}
+	else {
+		if (((cards[0] / 4) + (cards[1] / 4)) < 14) {
+			strength -= (1.0 / ((cards[0] / 4) + (cards[1] / 4))) * 15.0;
+		}
+		currentHand = 1;
+	}
+	strength += pow(((cards[0] / 4) + (cards[1] / 4)), 1.07) / 5.0;
+	if ((cards[0] % 4) == (cards[1] % 4)) {
+		strength += 0.75;
+	}
+	if (strength > 0) {
+		return((int) round(strength));
+	}
+	else {
+		return(0);
+	}
+}
 
 int getHandStrength5Cards(char * cards) {
+	currentHand = 10;
 	double average = 0;
 	int sum = 0;
 	int place = 0;
@@ -25,6 +51,7 @@ int getHandStrength5Cards(char * cards) {
 }
 
 int getHandStrength6Cards(char * cards) {
+	currentHand = 10;
 	double average = 0;
 	int sum = 0;
 	int place = 0;
@@ -50,6 +77,7 @@ int getHandStrength6Cards(char * cards) {
 }
 
 int getHandStrength7Cards(char * cards, int makeHand) {
+	currentHand = 10;
 	int hand;
 	if (makeHand) {
 		hand = bestHand(cards, 1);
@@ -115,6 +143,11 @@ int bestHand(char * cards, int makeHand) {
 		return(2);
 	}
 	else {
+		if (makeHand) {
+			for (int i = 0; i < 5; i++) {
+				fiveCardHand[i] = cards[6-i];
+			}
+		}
 		return(1);
 	}
 }
@@ -181,10 +214,14 @@ int checkStraightFlush(char * cards, int makeHand) {
 	int num;
 	int suit;
 	int current;
+
 	for (int i = 0; i < 3; i++) {
 		current = cards[i] / 4;
 		suit = cards[i] % 4;
 		num = 1;
+		if ((((cards[6] / 4) == 14) && ((cards[6] % 4) == suit)) || (((cards[5] / 4) == 14) && ((cards[5] % 4) == suit)) || (((cards[4] / 4) == 14) && ((cards[4] % 4) == suit))) {
+			num++;
+		}
 		for (int n = i + 1; n < 7; n++) {
 			if (((cards[n] / 4) == (current + 1)) && ((cards[n] % 4) == suit)) {
 				num++;
@@ -303,6 +340,9 @@ int checkFlush(char * cards, int makeHand) {
 
 int checkStraight(char * cards, int makeHand) {
 	int num = 1;
+	if ((cards[6]) / 4 == 14 && (cards[0] / 4) == 2) {
+		num = 2;
+	}
 	for (int i = 0; i < 6; i++) {
 		if (((cards[i] / 4) + 1) == (cards[i+1] / 4)) {
 			num++;

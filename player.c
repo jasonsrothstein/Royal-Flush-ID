@@ -12,8 +12,8 @@ int getHandStrength2Cards(char * cards) {
 		currentHand = 2;
 	}
 	else {
-		if (((cards[0] / 4) + (cards[1] / 4)) < 14) {
-			strength -= (1.0 / ((cards[0] / 4) + (cards[1] / 4))) * 15.0;
+		if (((cards[0] / 4) + (cards[1] / 4)) < 16) {
+			strength -= (1.0 / ((cards[0] / 4) + (cards[1] / 4))) * 20.0;
 		}
 		currentHand = 1;
 	}
@@ -189,6 +189,7 @@ int checkRoyalFlush(char * cards, int makeHand) {
 			if (makeHand) {
 				num = 0;
 				current = 10;
+				fiveCardHand[num++] = 40 + suit;
 				for (int n = firstTen + i; n < 7; n++) {
 					if (((cards[n] / 4) == (current + 1)) && ((cards[n] % 4) == suit)) {
 						current++;
@@ -219,8 +220,10 @@ int checkStraightFlush(char * cards, int makeHand) {
 		current = cards[i] / 4;
 		suit = cards[i] % 4;
 		num = 1;
-		if ((((cards[6] / 4) == 14) && ((cards[6] % 4) == suit)) || (((cards[5] / 4) == 14) && ((cards[5] % 4) == suit)) || (((cards[4] / 4) == 14) && ((cards[4] % 4) == suit))) {
-			num++;
+		if (current == 2) {
+			if ((((cards[6] / 4) == 14) && ((cards[6] % 4) == suit)) || (((cards[5] / 4) == 14) && ((cards[5] % 4) == suit)) || (((cards[4] / 4) == 14) && ((cards[4] % 4) == suit))) {
+				num++;
+			}
 		}
 		for (int n = i + 1; n < 7; n++) {
 			if (((cards[n] / 4) == (current + 1)) && ((cards[n] % 4) == suit)) {
@@ -230,13 +233,11 @@ int checkStraightFlush(char * cards, int makeHand) {
 			if (num > 4) {
 				if (makeHand) {
 					num = 0;
-					current = cards[i] / 4;
+					fiveCardHand[num] = cards[i];
 					for (int n = i + 1; n < 7; n++) {
-						if (((cards[n] / 4) == (current + 1)) && ((cards[n] % 4) == suit)) {
+						if (((cards[n] / 4) == ((fiveCardHand[num] / 4) + 1)) && ((cards[n] % 4) == suit)) {
 							num++;
-							current++;
 							fiveCardHand[num] = cards[n];
-							num++;
 						}
 					}
 					sortCardsGtoL(fiveCardHand);
@@ -284,17 +285,14 @@ int checkFullHouse(char * cards, int makeHand) {
 				for (int n = i - 1; n >= 0; n--) {
 					if ((cards[n] / 4) == (cards[i] / 4)) {
 						count++;
-					}
-				}
-				if (count > 2) {
-					count = 0;
-					for (int n = 0; n < 7; n++) {
-						if ((cards[n] / 4) == (cards[i] / 4)) {
-							fiveCardHand[count] = cards[n];
-							count++;
+						if (count > 1) {
+							fiveCardHand[0] = cards[n++];
+							fiveCardHand[1] = cards[n++];
+							fiveCardHand[2] = cards[n];
+							i = 0;
+							break;
 						}
 					}
-					break;
 				}
 			}
 			for (int i = 6; i > 0; i--) {
@@ -352,8 +350,8 @@ int checkStraight(char * cards, int makeHand) {
 			if (num > 4) {
 				if (makeHand) {
 					num = 1;
-					fiveCardHand[0] = cards[i-1];
-					for (int n = i - 2; n >= 0; n--) {
+					fiveCardHand[0] = cards[i];
+					for (int n = i - 1; n >= 0; n--) {
 						if ((cards[n] / 4) == ((fiveCardHand[num-1] / 4) - 1)) {
 							fiveCardHand[num] = cards[n];
 							num++;
@@ -377,7 +375,7 @@ int checkStraight(char * cards, int makeHand) {
 		if (makeHand) {
 			num = 1;
 			fiveCardHand[0] = cards[6];
-			for (int n = 6; n >= 0; n--) {
+			for (int n = 5; n >= 0; n--) {
 				if ((cards[n] / 4) == ((fiveCardHand[num-1] / 4) - 1)) {
 					fiveCardHand[num] = cards[n];
 					num++;
@@ -410,7 +408,7 @@ int checkThreeOfAKind(char * cards, int makeHand) {
 						num++;
 					}
 				}
-				for (int n = 6; n > 0; n++) {
+				for (int n = 6; n >= 0; n--) {
 					if ((cards[n] / 4) != (cards[i] / 4)) {
 						fiveCardHand[num] = cards[n];
 						num++;
@@ -482,10 +480,11 @@ int checkPair(char * cards, int makeHand) {
 				if (makeHand) {
 					int place = 2;
 					fiveCardHand[0] = cards[i];
-					fiveCardHand[0] = cards[n];
-					for (int m = 6; m >= 0; m++) {
+					fiveCardHand[1] = cards[n];
+					for (int m = 6; m >= 0; m--) {
 						if ((cards[m] / 4) != (cards[i] / 4)) {
 							fiveCardHand[place] = cards[m];
+							place++;
 						}
 						if (place > 4) {
 							return(1);

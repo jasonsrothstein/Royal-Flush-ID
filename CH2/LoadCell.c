@@ -18,6 +18,7 @@
 #include "LoadCell.h"
 #include "rfid.h"
 
+int PREVIOUS = 0;
 // Scale is 0, 1, or 2 and represents the physical load cell you wish to access
 int weigh(int scale) {
 	unsigned int count;

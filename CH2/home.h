@@ -29,5 +29,6 @@ int NUM_CHOICES;
 int NUM_PLAYERS;
 int TRAY_VALS[3];
 int INIT_BANK;
+int BLIND_INDEX;
 
 #endif /* HOME_H_ */

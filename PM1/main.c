@@ -162,9 +162,14 @@ int update_display() {
 			sprintf(num, "%d", POT);
 			displayX(1, 5, num);
 		}
-
-		sprintf(num, "%d", CALL);
-		displayX(2, 6, num);
+		if(STATUS == 7) {
+			display(2, "--- WINNER ---", 'c');
+		} else if(STATUS == 8) {
+			display(2, "*** SPLIT ***", 'c');
+		} else {
+			sprintf(num, "%d", CALL);
+			displayX(2, 6, num);
+		}
 		if(STATUS == 0) {
 			displayX(3,5,"FOLD");
 		} else {
@@ -252,7 +257,7 @@ int main(void) {
        init_led();
        init_btns();
 
-      // led(1,1);
+       led(2,1);
 
 
 
@@ -288,7 +293,10 @@ int main(void) {
    					clear_display();
    				}
    				else if(STATUS == 3) {
+   					//dealer
    					led(2,1);
+   					//return to active status
+   					STATUS = 1;
    				} else if((STATUS >= 4) & (STATUS <= 6)) {
    					led(1,0);
    					led(3,1);
@@ -321,7 +329,9 @@ int main(void) {
    			} else if(cmd == 10) { //send hand
    				xbee_send(0, 10, COMBO, 6);
    			} else if(cmd == 11) { //winning hand
-
+   				BANK = read_int();
+   				STATUS = 7;
+   				update_display();
    			} else if(cmd == 12) { //new round
    				BET = 0;
    				POT = 0;
@@ -334,9 +344,15 @@ int main(void) {
    				}
    				STR = 0;
    				H_INDEX = 0;
+   				//turn off dealer LED
+   				led(2,0);
 
    				update_display();
-   			} else if(cmd == 13) { //open network
+   			} else if(cmd == 13) { //tie
+   				int split = read_int();
+   				STATUS = 8;
+
+   				update_display();
 
    			} else if(cmd == 14) { //close network
 

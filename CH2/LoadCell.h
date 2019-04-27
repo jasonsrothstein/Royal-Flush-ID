@@ -21,3 +21,4 @@ int weigh3(void);
 
 int offset[3];
 int chipWeight[3];
+int PREVIOUS;

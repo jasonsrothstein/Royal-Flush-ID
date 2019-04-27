@@ -53,9 +53,9 @@ void initGame(int num_players, int init_bank) {
 
 
 	}
-
+	games.dealer = -1;
 	roundReset();
-	games.dealer = 0;
+
 	//set all to active
 	int status = 1;
 	xbee_send(BROADCAST, 4, &status, 1);
@@ -66,7 +66,10 @@ void initGame(int num_players, int init_bank) {
 }
 
 void roundReset(void) {
-	for (int i = 0; i < 4; i++) {
+	//notify players of new round
+	xbee_sendX((BROADCAST<<4) | 12);
+
+	for (int i = 0; i < games.numPlayers; i++) {
 		games.players[i].currentBet = 0;
 		games.players[i].handStrength = 0;
 		//hand resets?
@@ -77,11 +80,14 @@ void roundReset(void) {
 	games.pot = 0;
 	games.activePlayers = games.numPlayers;
 	games.dealer = (games.dealer + 1) % games.numPlayers; //advance dealer
+	PREVIOUS = 0;
+	BLIND_INDEX = games.dealer;
+	//notify dealer
+	int status = 3;
+	xbee_send(games.players[games.dealer].address, 4, &status, 1);
+	nano_wait(100*1000*1000);
 }
 
-int getStartHoldings(void) {
-	return(50);
-}
 
 void dealHands() {
 	for (int i = 0; i < 2; i++) {
@@ -104,32 +110,110 @@ void dealHands() {
 
 void dealToTable(char numCards) {
 	for (int i = 0; i < numCards; i++) {
+		led(3,0);
 		int new_card = getCard();
+		led(3,1);
 		//send to everybody
 		xbee_send(BROADCAST,5, &new_card, 1);
+		nano_wait(1000*1000*1000);
 	}
 }
 
+int blind(int turn, int type) {
+	int index = (turn + 1) % games.activePlayers;
+	while(games.players[index].gameStatus != 1) { //advance to first active player
+		index = (index+1)%games.activePlayers;
+	}
+	int status;
+	if(type == 0 ) { //little blind
+		status = 4;
+		//call update
+		xbee_send(games.players[index].address, 7, (BLINDS), 1);
+		nano_wait(100*1000*1000);
+	} else { // big blind
+		status = 5;
+		//call update
+		xbee_send(games.players[index].address, 7, (BLINDS+1), 1);
+		nano_wait(100*1000*1000);
+	}
+	//activate player
+	xbee_send(games.players[index].address, 4, &status, 1);
+	nano_wait(100*1000*1000);
+
+
+	int bet = 0;
+	while(((USART2->ISR & USART_ISR_RXNE) != USART_ISR_RXNE)) { //wait for xbee command back
+		//POTENTIAL ERROR: does not check what the message is
+		bet = getBet() - PREVIOUS;
+		//update player with current bet
+		xbee_send(games.players[index].address, 8, &bet, 1);
+		nano_wait(100*1000*1000); //give the LCD some time to catch up
+	}
+	char response = xbee_read();
+	games.players[index].currentBet += bet;
+	PREVIOUS += bet; //set the offset
+	games.players[index].holdings -= bet; //games.players[playerTurn].currentBet;
+	//notify all of pot update
+	games.pot += bet;
+	xbee_send(BROADCAST, 6, &(games.pot), 1);
+	nano_wait(100*1000*1000);
+	if(type ==1){ //send call amount to everyone
+		int new_call = games.players[index].currentBet;
+		xbee_send(BROADCAST, 7, &new_call, 1);
+		nano_wait(100*1000*1000);
+	}
+	return index;
+}
+
 void bet(int start, int playerTurn) {
-	for (int i = 0; i < 4; i++) {
+	for (int i = 0; i < games.activePlayers; i++) {
 		if (games.activePlayers > 1) {
-			if (++playerTurn > 3) {
+			if (++playerTurn > games.activePlayers) {
 				playerTurn = 0;
 			}
 			if (games.players[playerTurn].gameStatus == 1) {
-				games.players[playerTurn].currentBet = getBet();
-				games.players[playerTurn].holdings -= games.players[playerTurn].currentBet;
-				if (games.players[playerTurn].currentBet > start) {
-					bet(games.players[playerTurn].currentBet, playerTurn);
-					return;
+				//update screen
+				CHOICE = playerTurn;
+				choice_update(0);
+				//notify player
+				int status = 6;
+				xbee_send(games.players[playerTurn].address, 4, &status, 1);
+				int bet = 0;
+				while(((USART2->ISR & USART_ISR_RXNE) != USART_ISR_RXNE)) { //wait for xbee command back
+					//POTENTIAL ERROR: does not check what the message is
+					bet = getBet() - PREVIOUS;
+					//update player with current bet
+					xbee_send(games.players[playerTurn].address, 8, &bet, 1);
+					nano_wait(100*1000*1000); //give the LCD some time to catch up
 				}
-				if (games.players[playerTurn].currentBet <= start) {
-					if (games.players[playerTurn].holdings == 0) {
-						games.players[playerTurn].gameStatus = 2;
+				//read what the PM sent back
+				char response = xbee_read();
+				if(response & 0xF) { //fold
+					games.players[playerTurn].gameStatus = 0;
+					games.activePlayers--;
+				} else {
+					games.players[playerTurn].currentBet += bet;
+					PREVIOUS += bet; //set the offset
+					games.players[playerTurn].holdings -= bet; //games.players[playerTurn].currentBet;
+					//notify all of pot update
+					games.pot += bet;
+					xbee_send(BROADCAST, 6, &(games.pot), 1);
+					nano_wait(100*1000*1000);
+					if (games.players[playerTurn].currentBet > start) {
+						//a new raise, notify all via call update
+						int new_call = games.players[playerTurn].currentBet;
+						xbee_send(BROADCAST, 7, &new_call, 1);
+						bet(new_call, playerTurn);
+						return;
 					}
-					else {
-						games.players[playerTurn].gameStatus = 0;
-						games.activePlayers--;
+					if (games.players[playerTurn].currentBet <= start) {
+						if (games.players[playerTurn].holdings == 0) {
+							games.players[playerTurn].gameStatus = 2;
+						}
+						else {
+							games.players[playerTurn].gameStatus = 0;
+							games.activePlayers--;
+						}
 					}
 				}
 
@@ -139,7 +223,7 @@ void bet(int start, int playerTurn) {
 }
 
 int getBet(void) {
-	return(weigh(0));
+	return(TRAY_VALS[0]*weigh(0) + TRAY_VALS[1]*weigh(1) + TRAY_VALS[2]*weigh(2));
 }
 
 void resolveHand() {
@@ -156,7 +240,7 @@ void resolveHand() {
 				break;
 			}
 			if (games.players[i].gameStatus > 0) {
-				if (games.players[i].handStrength > games.players[winner].handStrength) {
+				if (games.players[i].handStrength > games.players[winner].handStrength) { //edge case- first winner needs to be
 					winner = i;
 				}
 				else if (games.players[i].handStrength == games.players[winner].handStrength) {
@@ -179,6 +263,8 @@ void resolveHand() {
 					}
 				}
 			}
+			//update winner
+			xbee_send(games.players[winner].address, 11, &(games.players[winner].holdings), 1);
 			games.players[winner].currentBet = 0;
 			games.players[winner].gameStatus = 0;
 		}
@@ -198,6 +284,7 @@ void resolveHand() {
 						}
 					}
 				}
+				//send command for split ties
 				games.players[ties[n]].currentBet = 0;
 				games.players[ties[n]].gameStatus = 0;
 			}

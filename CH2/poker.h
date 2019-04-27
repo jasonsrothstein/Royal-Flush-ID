@@ -33,13 +33,12 @@ game games;
 
 void initGame(int, int);
 void roundReset(void);
-int getStartHoldings(void);
+void blind(int);
 void bet(int start, int playerTurn);
 int getBet(void);
 void dealHands(void);
 void dealToTable(char numCards);
 void XBEEsend(int address, int data);
-void dealHands(void);
 void resolveHand(void);
 int tieBreaker(int player1, int player2, int * ties);
 void tieHandler(int player1, int player2, int * ties);

@@ -23,6 +23,8 @@ int NUM_CHOICES = 4;
 int NUM_PLAYERS = 0;
 int TRAY_VALS[3] = {0,0,0};
 int INIT_BANK = 0;
+int BLINDS[2] = {1,2};
+int BLIND_INDEX = 0; //used for blinds
 
 void init_btns() {
 	//Btns 1,2,3 on PA0,1,11 on TIM2(1), (2), TIM1(4)
@@ -118,12 +120,12 @@ void state_update(void) {
 	} else if(STATE == 1) {
 		//menu 1
 		display(1, "Num. of Players?", 'c');
-		strcpy(OPTIONS[0],"< 1 >");
-		strcpy(OPTIONS[1],"< 2 >");
-		strcpy(OPTIONS[2],"< 3 >");
-		strcpy(OPTIONS[3], "< 4 >");
-		NUM_CHOICES = 4;
-		CHOICE = 1;
+		//strcpy(OPTIONS[0],"< 1 >");
+		strcpy(OPTIONS[0],"< 2 >");
+		strcpy(OPTIONS[1],"< 3 >");
+		strcpy(OPTIONS[2], "< 4 >");
+		NUM_CHOICES = 3;
+		CHOICE = 0;
 		choice_update(0);
 	}
 	else if(STATE == 2) {
@@ -147,6 +149,18 @@ void state_update(void) {
 		CHOICE = 2;
 		choice_update(0);
 	}
+	else if(STATE == 4) {
+			//menu 4
+			display(1, "Big/Little Blinds?", 'c');
+			strcpy(OPTIONS[0],"< $1/$2>");
+			strcpy(OPTIONS[1], "< $5/$10 >");
+			strcpy(OPTIONS[2] , "< $10/$20 >");
+
+			NUM_CHOICES = 2;
+			CHOICE = 0;
+			choice_update(0);
+		}
+
 	else if(STATE == 10) {
 		//load cell zeroing
 		display(1, "Tray Calibration", 'l');
@@ -202,8 +216,75 @@ void state_update(void) {
 		state_update();
 
 	} else if(STATE == 22) {
+		//little blind
 		clear_display();
 		display(1, "ROUND 1 BETTING", 'c');
+		display(3, "Little Blind", 'c');
+		BLIND_INDEX = blind(games.dealer, 0);
+		STATE = 23;
+		state_update();
+	} else if(STATE == 23) {
+		//big blind
+		clear_line(3);
+		display(3, "Big Blind", 'c');
+		BLIND_INDEX = blind(BLIND_INDEX, 1);
+		STATE = 24;
+		state_update();
+	} else if(STATE == 24) {
+		//round 1 betting
+		bet(BLINDS(1), BLIND_INDEX);
+		STATE = 25;
+		state_update();
+	}
+	else if(STATE == 25) {
+		//flop
+		clear_display();
+		display(1, "---- FLOP ----");
+		display(3, "Scan 3 cards", 'c');
+		dealToTable(3);
+		bet(0, games.dealer);
+		STATE = 26;
+		state_update();
+	}
+	else if(STATE == 26) {
+		//turn
+		clear_display();
+		display(1, "---- TURN ----");
+		display(3, "Scan 1 card", 'c');
+		dealToTable(1);
+		bet(0, games.dealer);
+		STATE = 27;
+		state_update();
+	}
+	else if(STATE == 27) {
+		//river
+		clear_display();
+		display(1, "---- RIVER ----");
+		display(3, "Scan 1 card", 'c');
+		dealToTable(1);
+		bet(0, games.dealer);
+		clear_line(3);
+		display(3, "Press BTN2 to",'l');
+		display(4,"show winners", 'l');
+	}
+	else if(STATE == 28) {
+		//winner calc
+		//1. collect final hands
+		int i;
+		for(i = 0; i < games.numPlayers; i++) {
+			if(games.players[i].gameStatus == 1) {
+				xbee_send((games.players[i].address << 4)| 10);
+				games.players[i].handStrength = read_int(); //load strength
+				for(int j = 0; j<5;j++) {
+					games.players[i].hand[j] = (char) read_int(); //load five cards of hand
+				}
+			}
+		}
+		//2. resolve winners
+		resolveHand();
+		//3. push results
+	} else if(STATE == 30) {
+		//round reset
 	}
 }
 
@@ -253,11 +334,28 @@ void TIM2_IRQHandler() {
 			}  else if(CHOICE == 2) {
 				INIT_BANK = 1000;
 			}
-			else if(CHOICE == 2) {
+			else if(CHOICE == 1) {
 				INIT_BANK = 500;
 			}
 			else {
 				INIT_BANK = 100;
+			}
+			clear_display();
+			STATE = 4;
+			state_update();
+		}
+		else if(STATE == 4) {
+			//initial bank selected
+			if(CHOICE == 2) {
+				BLINDS[0] = 10;
+				BLINDS[1] = 20;
+			}  else if(CHOICE == 1) {
+				BLINDS[0] = 5;
+				BLINDS[1] = 10;
+			}
+			else {
+				BLINDS[0] = 1;
+				BLINDS[1] = 2;
 			}
 			clear_display();
 			STATE = 10;
@@ -276,6 +374,11 @@ void TIM2_IRQHandler() {
 		else if(STATE == 12) {
 			clear_display();
 			STATE = 20;
+			state_update();
+		}
+		else if(STATE == 27) {
+			clear_display();
+			STATE = 28;
 			state_update();
 		}
 

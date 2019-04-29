@@ -21,21 +21,6 @@ static void nano_wait(int t) {
         : : "r"(t) : "r0", "cc");
 }
 
-
-void led_init() {
-	RCC->AHBENR |= RCC_AHBENR_GPIOCEN;
-	GPIOC->MODER |= 1<<(2*0);
-	GPIOC->ODR &= ~(1<<0);
-}
-
-void led_output(char c) {
-	if(c) {
-		GPIOC->ODR |= 1<<0;
-	} else {
-		GPIOC->ODR &= ~(1<<0);
-	}
-}
-
 void usart2_init(void) {
 	//pins
 	RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
@@ -53,7 +38,6 @@ void usart2_init(void) {
 
 	//enables
 	USART2->CR1 |= USART_CR1_RE | USART_CR1_TE |USART_CR1_UE;
-
 	while((USART2->ISR & USART_ISR_REACK) == 0);
 	while((USART2->ISR & USART_ISR_TEACK) == 0);
 }

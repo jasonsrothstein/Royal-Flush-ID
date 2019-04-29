@@ -1,12 +1,13 @@
 #include "stm32f0xx.h"
 #include "stm32f0_discovery.h"
 #include <string.h>
-#include <stdio.h>
+//#include <stdio.h>
 #include "display.h"
 #include "xbee.h"
 #include "player.h"
 
 static char MY_ADDR = 0b001;
+
 int SCREEN = 10;
 int NUM_SCREENS = 2;
 int BANK = 0;
@@ -18,19 +19,29 @@ int STATUS = 0;
 int STR = 0;
 //char hand[7] = {0,0,0,0,0,0,0};
 int H_INDEX = 0;
+int ROUND = 0;//kinda need that new round command to reset this
+int WINNINGS = 0;
+int WINNERS = 0;
+int WIN_HAND = 0;
+int OLD_BANK = 0;
+int OLD_CALL = 0;
+int RESULTS = 0; //0-N/A, 1-fold, 2-lose, 3-side pot, 4-split, 5-win
+
 int BROKE = 0;
 
-
-void nano_wait(int t) {
-    asm("       mov r0,%0\n"
-        "repeat:\n"
-        "       sub r0,#83\n"
-        "       bgt repeat\n"
-        : : "r"(t) : "r0", "cc");
-}
-
-//debouncing a push button
-
+static char POKER_HANDS[11][14] = {
+	"N/A",
+	"HIGH CARD",
+	"1 PAIR",
+	"2 PAIR",
+	"3 OF A KIND",
+	"STRAIGHT",
+	"FLUSH",
+	"FULL HOUSE",
+	"4 OF A KIND",
+	"STRAIGHT FLUSH",
+	"ROYAL FLUSH"
+};
 
 
 void init_btns() {
@@ -90,60 +101,6 @@ void led(int pin, int state) {
 }
 
 
-void TIM2_IRQHandler() {
-	//check TIM2->SR CCXIF flag to determine source
-	BROKE = 1;
-    if(TIM2->SR & TIM_SR_CC1IF) {
-    	//BTN 2
-    	//fold
-    	if(STATUS == 6) {
-    		STATUS = 0;
-    		xbee_sendX((MY_ADDR<<4) | 3);
-    		xbee_readH(MY_ADDR);
-    		xbee_send(0, 4, &STATUS, 1);
-    		update_display();
-    		led(1,0);
-    		led(3,0);
-    	}
-
-    }
-    else if(TIM2->SR & TIM_SR_CC2IF) {
-    	//BTN 1
-    	//pass
-    	if((STATUS <= 6) &&(STATUS >=4)) {
-    		STATUS = 1;
-    		xbee_sendX(0 | 3);
-    		xbee_readH(MY_ADDR);
-    		nano_wait(10*1000*1000);
-    		xbee_send(0, 4, &STATUS, 1);
-    		BANK -= BET;
-    		clear_line(1);
-    		led(3,0);
-    		led(1,1);
-    	}
-
-    }
-    int fake;
-    fake = TIM2->CCR1;
-    fake = TIM2->CCR2;
-    TIM2->SR &= ~TIM_SR_UIF;
-}
-void TIM1_CC_IRQHandler() {
-	BROKE = 1;
-if(STATUS != 0) {
-	SCREEN += 1;
-	if(SCREEN > 1) {
-		SCREEN = 0;
-	}
-	clear_display();
-	update_display();
-
-	int fake;
-	fake = TIM1->CCR4;
-	TIM1->SR &= ~TIM_SR_UIF;
-}
-}
-
 int read_int(void) {
 	int rv = 0;
 	int j;
@@ -158,6 +115,81 @@ int read_int(void) {
 	}
 	return rv;
 }
+
+
+void nano_wait(int t) {
+    asm("       mov r0,%0\n"
+        "repeat:\n"
+        "       sub r0,#83\n"
+        "       bgt repeat\n"
+        : : "r"(t) : "r0", "cc");
+}
+
+//debouncing a push button
+
+
+
+
+
+void TIM2_IRQHandler() {
+	//check TIM2->SR CCXIF flag to determine source
+	BROKE = 1;
+    if(TIM2->SR & TIM_SR_CC1IF) {
+    	//BTN 2
+    	//fold
+    	if(STATUS == 6) {
+    		STATUS = 0;
+    		led(1,0);
+    		led(3,0);
+    		xbee_sendX((MY_ADDR<<4) | 3);
+    		xbee_readH(MY_ADDR);
+    		xbee_send(0, 4, &STATUS, 1);
+    		update_display();
+
+    	}
+
+    }
+    else if(TIM2->SR & TIM_SR_CC2IF) {
+    	//BTN 1
+    	//pass
+    	if((STATUS <= 6) &&(STATUS >=4)) {
+    		led(3,0);
+    		led(1,1);
+    		STATUS = 1;
+    		xbee_sendX(0 | 3);
+    		xbee_readH(MY_ADDR);
+    		nano_wait(10*1000*1000);
+    		xbee_send(0, 4, &STATUS, 1);
+    		BANK -= BET;
+    		clear_line(1);
+
+    	}
+
+    }
+    int fake;
+    fake = TIM2->CCR1;
+    fake = TIM2->CCR2;
+    TIM2->SR &= ~TIM_SR_UIF;
+}
+void TIM1_CC_IRQHandler() {
+	BROKE = 1;
+if(STATUS != 0) {
+	SCREEN += 1;
+	if((SCREEN > 7) && (SCREEN < 9)) { //screen is 6-8
+		SCREEN = 6;
+	}
+	else if((SCREEN > 1) && (SCREEN < 6)) { //screen is 0-2
+		SCREEN = 0;
+	}
+	clear_display();
+	update_display();
+
+	int fake;
+	fake = TIM1->CCR4;
+	TIM1->SR &= ~TIM_SR_UIF;
+}
+}
+
 
 void update_display() {
 	if(SCREEN == 0) {
@@ -200,50 +232,15 @@ void update_display() {
 		}
 	}
 	else if(SCREEN == 1) {
-		display(1, "hand: ", 'l');
-		switch(COMBO[0]) {
-		case 1:
-			displayX(1, 6, "HIGH CARD");
-			break;
-		case 2:
-			displayX(1, 6, "1 PAIR");
-			break;
-		case 3:
-			displayX(1, 6, "2 PAIR");
-			break;
-		case 4:
-			displayX(1, 6, "3 OF A KIND");
-			break;
-		case 5:
-			displayX(1, 6, "STRAIGHT");
-			break;
-		case 6:
-			displayX(1, 6, "FLUSH");
-			break;
-		case 7:
-			displayX(1, 6, "FULL HOUSE");
-			break;
-		case 8:
-			displayX(1, 6, "4 OF A KIND");
-			break;
-		case 9:
-			displayX(1, 6, "STRAIGHT FLUSH");
-			break;
-		case 10:
-			displayX(1, 6, "ROYAL FLUSH");
-			break;
-		default:
-			displayX(1,6, "N/A");
-			break;
-		}
+		display(1, "Hand: ", 'l');
+		displayX(1, 6, POKER_HANDS[COMBO[0]]);
 
-
-
-		display(2, "STRENGTH: ", 'l');
+		display(2, "Strength: ", 'l');
 		int i;
 		char block[2];
 		block[0] = 0b00101010;
 		block[1] = '\0';
+		if(STR > 10) STR = 10;
 		for(i = 0; i < STR; i++) {
 			displayX(2, 10+i, block);
 		}
@@ -251,34 +248,110 @@ void update_display() {
 		for(i = 0; i < (10-STR); i++) {
 			displayX(2, 10+STR+i, block);
 		}
-		display(3, "POT ODDS: ", 'l');
+		display(3, "Pot Odds: ", 'l');
 		//char num[7];
 		//sprintf(num, "%.2f", (double) POT / (double) (CALL-BET));
 
 
 		//ind. load cells screen?
 		//table stats
-	} else if(SCREEN == 10) {
-		display(1, "Royal Flush ID", 'c');
-		display(3, "Please wait", 'c');
-		display(4, "for setup", 'c');
 	}
+	else if(SCREEN == 6) {
+		//ind. results screen
+		display(1, "INDIVIDUAL", 'c');
+		display(2, "Outcome: ", 'l');
+		display(3, "Winnings: ", 'l');
+		display(4, "Net: ", 'l');
+
+		if(RESULTS == 5) {
+			displayX(2, 16, "WIN");
+		} else if(RESULTS == 4) {
+			displayX(2, 14, "SPLIT");
+		} else if(RESULTS == 3) {
+			displayX(2, 11, "SIDE WIN");
+		} else if(RESULTS == 2) {
+			displayX(2, 15, "LOSE");
+		} else if(RESULTS == 1) {
+			displayX(2, 15, "FOLD");
+		} else {
+			displayX(2, 16, "N/A");
+		}
+
+		char num[6];
+		sprintf(num, "%6d", WINNINGS);
+		displayX(3, 9, num);
+
+		sprintf(num, "%6d", BANK - OLD_BANK);
+		displayX(4, 9, num);
+
+	} else if(SCREEN == 7) {
+		//table results
+		char title[20];
+		sprintf(title, "ROUND %d RESULTS", ROUND);
+		display(1, title, 'c');
+
+		display(2, "Total Pot: ", 'l');
+		char num[6];
+		sprintf(num, "%6d", POT);
+		displayX(2, 14, num);
+
+		display(3, "Winner: ", 'l');
+		int col = 8;
+		if(WINNERS & 0b0001) {
+			displayX(3, col, "P1");
+			col+= 2;
+		}
+		if(WINNERS & 0b0010) {
+			if(col != 8) {
+				displayX(3, col, "/");
+				col+= 1;
+			}
+			displayX(3, col, "P2");
+			col+= 2;
+		}if(WINNERS & 0b0100) {
+			if(col != 8) {
+				displayX(3, col, "/");
+				col+= 1;
+			}
+			displayX(3, col, "P3");
+			col+= 2;
+		}
+		if(WINNERS & 0b1000) {
+			if(col != 8) {
+				displayX(3, col, "/");
+				col+= 1;
+			}
+			displayX(3, col, "P4");
+			col+= 2;
+		}
+
+		display(4, "      ", 'l');
+		displayX(4, 6, POKER_HANDS[WIN_HAND]);
+
+	}
+	else if(SCREEN == 10) {
+		//waiting screen
+			display(1, "Royal Flush ID", 'c');
+			display(3, "Please wait", 'c');
+			display(4, "for setup", 'c');
+		}
 }
 
 
 int main(void) {
 
 
-	lcd_init();
+		lcd_init();
        xbee_init();
-       init_led();
-       init_btns();
+      init_led();
+      init_btns();
 
        led(2,1);
 
-       STATUS = 0; //auto join game
+       STATUS = 0;
+       //SCREEN = 10;
        update_display();
-
+       //xbee_sendX('a');
 
    	while(1) {
    		char byte1 = xbee_read();
@@ -287,8 +360,14 @@ int main(void) {
    			char cmd = 0xF & byte1;
    			if(cmd == 0) { //stop
 
-   			} else if(cmd == 1) { //confirm
 
+   			} else if(cmd == 1) { //confirm
+   				if(STATUS == 7) {
+   					STATUS = 8; //meaning, full send ahead
+   					SCREEN = 6;
+   					led(2,0); //do other LED stuff here
+   					update_display();
+   				}
    			} else if(cmd == 2) { //interrupt
 
    			} else if(cmd == 3) { //new game
@@ -320,12 +399,14 @@ int main(void) {
    			} else if(cmd == 5) { //new card
    				hand[H_INDEX] = (char) read_int();
    				H_INDEX++;
+   				if(H_INDEX > 6) H_INDEX = 6;
 
    				if(H_INDEX == 2) {
    					STR = getHandStrength2Cards(hand);
    				}
    				else if(H_INDEX == 5) {
    					STR = getHandStrength5Cards(hand);
+
    				} else if(H_INDEX ==6) {
    					STR = getHandStrength6Cards(hand);
    				} else if(H_INDEX ==7) {
@@ -336,35 +417,46 @@ int main(void) {
    					COMBO[4] = fiveCardHand[3];
    					COMBO[5] = fiveCardHand[4];
    				}
-
+   				OLD_CALL += CALL;
+   				CALL = 0;
    				COMBO[0] = currentHand;
    				BET = 0;
-   				CALL = 0;
+
    				update_display();
    			} else if(cmd == 6) { //pot update
    				POT = read_int();
    				update_display();
    			} else if(cmd == 7) { //call update
-   				CALL = read_int();
+   				CALL = read_int() - OLD_CALL;
    				update_display();
    			} else if(cmd == 8) { //bet update
    				int diff = read_int();
    				BET += diff;
-   				BANK -= BET;
+   				BANK -= diff;
    				update_display();
    			} else if(cmd == 9) { //bank update
    				BANK = read_int();
    				update_display();
    			} else if(cmd == 10) { //send hand
    				xbee_send(0, 10, COMBO, 6);
-   			} else if(cmd == 11) { //winning hand
-   				BANK = read_int();
+   			} else if(cmd == 11) { //ind. results
+   				RESULTS = xbee_readH(MY_ADDR); //one char
+   				WINNINGS = read_int(); //how much to pick up off the table
    				STATUS = 7;
-   				update_display();
+
    			} else if(cmd == 12) { //new round
+   				ROUND++;
    				BET = 0;
+   				OLD_CALL = 0;
    				POT = 0;
    				CALL = 0;
+   				RESULTS = 0;
+   				WINNINGS = 0;
+   				WINNERS = 0;
+   				WIN_HAND = 0;
+
+   				OLD_BANK = BANK;
+
    				for(int i = 0; i < 7; i++) {
    					hand[i] = 99;
    				}
@@ -376,19 +468,42 @@ int main(void) {
    				//turn off dealer LED
    				led(2,0);
 
+   				SCREEN = 0;
    				update_display();
-   			} else if(cmd == 13) { //tie
-   				int split = read_int();
-   				STATUS = 8;
+   			} else if(cmd == 13) { //table results
+   				WINNERS = xbee_readH(MY_ADDR);
+				WIN_HAND = xbee_readH(MY_ADDR);
 
+   			} else if(cmd == 14) { //open network / reset
+   				clear_display();
+   				ROUND = 0;
+   				BANK = 0;
+   				OLD_CALL = 0;
+   				BET = 0;
+   				POT = 0;
+   				CALL = 0;
+   				RESULTS = 0;
+   				WINNINGS = 0;
+   				WINNERS = 0;
+   				WIN_HAND = 0;
+   				OLD_BANK = 0;
+
+   				for(int i = 0; i < 7; i++) {
+   					hand[i] = 99;
+   				}
+   				for(int i=0; i<6;i++) {
+   					COMBO[i] = 0;
+   				}
+   				STR = 0;
+   				H_INDEX = 0;
+   				//turn on dealer LED
+				led(2,1);
+   				STATUS = 0;
+   				SCREEN = 10;
    				update_display();
-
-   			} else if(cmd == 14) { //open network
-   				STATUS = 9;
    			} else if(cmd == 15) { //close network
    				MY_ADDR = read_int();
    				STATUS = 10;
-
    			}
    		}
    	}

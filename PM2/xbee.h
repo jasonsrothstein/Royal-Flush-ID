@@ -6,7 +6,7 @@ void xbee_init();
 void xbee_send(char, char, int*, int);
 void xbee_sendX(char);
 char xbee_read();
-char xbee_readH(char);
+char xbee_sendH(char);
 
 
 #endif /* DISPLAY_H_ */

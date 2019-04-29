@@ -30,7 +30,7 @@ int getHandStrength2Cards(char * cards) {
 }
 
 int getHandStrength5Cards(char * cards) {
-	currentHand = 10;
+	int Hand = 10;
 	double average = 0;
 	int sum = 0;
 	int place = 0;
@@ -41,17 +41,21 @@ int getHandStrength5Cards(char * cards) {
 		else {
 			cards[5] = i;
 			sum += getHandStrength6Cards(cards);
+			if (currentHand < Hand) {
+				Hand = currentHand;
+			}
 		}
 	}
 	average = (double) sum / 46;
 	if (average - (int) average > .5) {
 		average++;
 	}
+	currentHand = Hand;
 	return( (int) average);
 }
 
 int getHandStrength6Cards(char * cards) {
-	currentHand = 10;
+	int Hand = 10;
 	double average = 0;
 	int sum = 0;
 	int place = 0;
@@ -67,12 +71,16 @@ int getHandStrength6Cards(char * cards) {
 			tempCards[6] = i;
 			sortCardsLtoG(tempCards);
 			sum += getHandStrength7Cards(tempCards, 0);
+			if (currentHand < Hand) {
+				Hand  = currentHand;
+			}
 		}
 	}
 	average = (double) sum / 46;
 	if (average - (int) average > .5) {
 		average++;
 	}
+	currentHand = Hand;
 	return( (int) average);
 }
 

@@ -2,13 +2,14 @@
 #include "stm32f0_discovery.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include "display.h"
 #include "player.h"
 #include "xbee2.h"
 
 int SCREEN = 10;
 int NUM_SCREENS = 2;
-int EDIT = 0;
+char pnum[11];
 
 int BANK = 0;
 int BET = 0;
@@ -27,7 +28,38 @@ int OLD_CALL = 0;
 int OLD_BET = 0;
 int RESULTS = 0; //0-N/A, 1-fold, 2-lose, 3-side pot, 4-split, 5-win
 
-static char POKER_HANDS[11][14] = {
+
+
+typedef struct edit {
+	int val;
+	struct edit* next;
+} Edit;
+
+
+
+Edit* ptr = NULL;
+
+void add_edit(int request) {
+	Edit* new_edit = (Edit*) malloc(sizeof(Edit));
+	new_edit->val = request;
+	new_edit->next = NULL;
+	if(ptr == NULL) {
+		ptr = new_edit;
+	} else {
+		Edit* curr_ptr = ptr;
+		while(curr_ptr->next != NULL) {
+			curr_ptr = curr_ptr ->next;
+		}
+		curr_ptr -> next = new_edit;
+	}
+}
+void delete_edit() {
+	Edit* old_ptr = ptr;
+	ptr = ptr->next;
+	free(old_ptr);
+}
+
+static char POKER_HANDS[11][15] = {
 		"N/A",
 		"HIGH CARD",
 		"1 PAIR",
@@ -118,13 +150,14 @@ void TIM2_IRQHandler() {
 		//BTN 2
 		//fold
 		if(STATUS == 6) {
-			xbee_sendX(3); //request to stop
-			xbee_read(); //wait for go ahead
-			xbee_send(0, 4, &STATUS, 1); //send status
 			STATUS = 0;
+			xbee_sendX(3); //request to stop
+			while (xbee_read() != 0x81);
+			nano_wait(5*1000*1000);
+			xbee_send(0, 4, &STATUS, 1); //send status
 			led(1,0);
 			led(3,0);
-			EDIT = (0 << 4) | 6;
+			add_edit( (0 << 4) | 6);
 		}
 
 	}
@@ -132,27 +165,28 @@ void TIM2_IRQHandler() {
 		//BTN 1
 		//pass
 		if((STATUS <= 6) &&(STATUS >=4)) {
-
+			if(BET >= CALL) {
 			xbee_sendX(3);
 			//nano_wait(5*1000*1000);
-			//char recieved = 0;
-			//while(recieved != 1) {
-			xbee_read();
+			while (xbee_read() != 0x81);
 			//}
-			//nano_wait(5*1000*1000);
+			nano_wait(5*1000*1000);
 			//nano_wait(10*1000*1000);
 			xbee_send(0, 4, &STATUS, 1);
 			BANK -= BET - OLD_BET;
 			OLD_BET = BET;
 			if(STATUS == 6) {
-				EDIT = (0<<4) | 6;
+				add_edit( (0<<4) | 7);
 			}
 			else {
-				EDIT = (0<<4) | 6; //big/little blind needs reset
+				add_edit((0<<4) | 7); //big/little blind needs reset
 			}
 			led(3,0);
 			led(1,1);
 			STATUS = 1;
+			} else {
+				//error- bad bet
+			}
 		}
 
 	}
@@ -171,7 +205,7 @@ void TIM1_CC_IRQHandler() {
 			new_screen = 0;
 		}
 
-		EDIT = (new_screen<<4) | 7;
+		add_edit((new_screen<<4) | 7);
 
 		int fake;
 		fake = TIM1->CCR4;
@@ -181,7 +215,8 @@ void TIM1_CC_IRQHandler() {
 
 
 void update_display() {
-	if(EDIT == 0) return; //nothing to do
+	if(ptr == NULL) return; //nothing to do
+	int EDIT = ptr->val;
 	int new_screen = ((EDIT & 0xF0) >> 4);
 	int lines = 0x0F & EDIT;
 
@@ -192,62 +227,74 @@ void update_display() {
 			//lines = 7;
 		}
 		else {
+			delete_edit();
 			return; //update does not pertain to current screen
 		}
 	}
 	if(lines > 5) clear_display();
 
-	EDIT = 0; 	//reset so if changed during execution, it will run again with new update
-	char num[7]; //used for displaying numbers
+		char num[7]; //used for displaying numbers
 
 	if(SCREEN == 0) {
 		if(lines > 6) {
-			display(1,"Pot: ", 'l');
-			display(2,"Call: ", 'l');
-			display(3, "Bet: ", 'l');
-			display(4, "Bank: ", 'l');
+			displayX(1,9,"Pot:     ");
+			displayX(2,9,"Call:    ");
+			displayX(3,9, "Bet:      ");
+			displayX(4,9, "Bank:    ");
 		}
 
 		if((lines == 1) || (lines >5)) {
-			if(STATUS == 4) {
-				//clear_line(1);
-				display(1,"LITTLE BLIND    ", 'l');
-			} else if(STATUS == 5) {
-				//clear_line(1);
-				display(1,"BIG BLIND      ", 'l');
-			} else {
-				display(1,"Pot: ", 'l');
+				//display(1,"Pot: ", 'l');
 				sprintf(num, "%6d", POT);
-				displayX(1, 5, num);
-			}
+				displayX(1, 14, num);
 		}
-
 		if((lines == 2) || (lines >5)) {
-			sprintf(num, "%5d", CALL);
-			displayX(2, 6, num);
+			sprintf(num, "%6d", CALL);
+			displayX(2, 14, num);
 		}
 		if((lines == 3) || (lines >5)) {
 			if(STATUS == 0) {
-				displayX(3,5,"FOLD");
+				displayX(3,14,"  FOLD");
 			} else {
 				sprintf(num, "%6d", BET);
-				displayX(3, 5, num);
+				displayX(3, 14, num);
 			}
 		}
 		if((lines == 4) || (lines >5)) {
 			if(STATUS == -1) {
-				displayX(4, 6, "BUST    ");
+				displayX(4, 14, "  BUST");
 			} else {
-				sprintf(num, "%5d", BANK);
-				displayX(4, 6, num);
+				sprintf(num, "%6d", BANK);
+			    displayX(4, 14, num);
 			}
 		}
+
+
+		 if(STATUS == 4) {
+			// displayX(1, 0, " ------- ");
+			displayX(2, 0, "*LITTLE* ");
+			displayX(3, 0, "*BLIND * ");
+			//displayX(4, 0, " ------ ");
+		} else if(STATUS == 5) {
+			//displayX(1, 0, "*********");
+			displayX(2, 0, " * BIG * ");
+			displayX(3, 0, " *BLIND* ");
+			//displayX(4, 0, "*********");
+		} else if(STATUS == 6) {
+			 displayX(1, 0, "       ");
+			displayX(2, 0, "| YOUR |");
+			displayX(3, 0, "| TURN |");
+			displayX(4, 0, "       ");
+		} else  {
+			displayX(2, 0, "PLAYER   ");
+			displayX(3, 0, pnum);
+	}
 	}
 	else if(SCREEN == 1) {
 		if (lines > 6) {
 			display(1, "Hand: ", 'l');
 			display(2, "Strength: ", 'l');
-			//display(3, "Pot Odds: ", 'l');
+			display(3, "Pot Odds: ", 'l');
 		}
 		if((lines == 1) || (lines >5)) {
 			displayX(1, 6, POKER_HANDS[COMBO[0]]);
@@ -268,22 +315,30 @@ void update_display() {
 		}
 		if((lines == 3) || (lines > 5)) {
 			float pot_odds = 0;
-			if((CALL-BET != 0)) {
+			int int_PO = 0;
+			int dec2PO = 0;
+			if((CALL-BET) != 0) {
 				pot_odds = (float) POT / (float) (CALL-BET);
+				int_PO = pot_odds; //integer value
+				dec2PO = 100*(pot_odds - int_PO); //now just decimal part
+				sprintf(num, "%d.%02d", int_PO, dec2PO);
+				displayX(3, 10, num);
+			} else {
+				displayX(3, 10, "N/A ");
 			}
-			//sprintf(num, "%.2f", pot_odds);
+
 		}
 
-		//ind. load cells screen?
+
 		//table stats
 	}
 	else if(SCREEN == 6) {
 		//ind. results screen
 		if(lines ==7) {
 			display(1, "INDIVIDUAL", 'c');
-			display(2, "Outcome: ", 'l');
-			display(3, "Winnings: ", 'l');
-			display(4, "Net: ", 'l');
+			display(2, " Outcome: ", 'l');
+			display(3, " Winnings: ", 'l');
+			display(4, " Net: ", 'l');
 		}
 		if((lines == 2) || (lines>5)) {
 			if(RESULTS == 5) {
@@ -303,11 +358,11 @@ void update_display() {
 		if((lines == 3) || (lines>5)) {
 
 			sprintf(num, "%6d", WINNINGS);
-			displayX(3, 9, num);
+			displayX(3, 13, num);
 		}
 		if((lines == 4) || (lines>5)) {
 			sprintf(num, "%6d", BANK - OLD_BANK);
-			displayX(4, 9, num);
+			displayX(4, 13, num);
 		}
 	} else if(SCREEN == 7) {
 		//table results
@@ -317,45 +372,46 @@ void update_display() {
 			display(1, title, 'c');
 			display(2, "Total Pot: ", 'l');
 			display(3, "Winner: ", 'l');
+			display(4, "Win Hand:",'l');
 
 		}
 		if((lines == 2) || (lines>5)) {
 			sprintf(num, "%6d", POT);
-			displayX(2, 14, num);
+			displayX(2, 13, num);
 		}
 		if((lines == 3) || (lines>5)) {
-			int col = 8;
+			int col = 17;
 			if(WINNERS & 0b0001) {
 				displayX(3, col, "P1");
-				col+= 2;
+				col-= 1;
 			}
 			if(WINNERS & 0b0010) {
 				if(col != 8) {
 					displayX(3, col, "/");
-					col+= 1;
+					col-= 2;
 				}
 				displayX(3, col, "P2");
-				col+= 2;
+				col-= 1;
 			}if(WINNERS & 0b0100) {
 				if(col != 8) {
 					displayX(3, col, "/");
-					col+= 1;
+					col-= 2;
 				}
 				displayX(3, col, "P3");
-				col+= 2;
+				col-= 1;
 			}
 			if(WINNERS & 0b1000) {
 				if(col != 8) {
 					displayX(3, col, "/");
-					col+= 1;
+					col-= 2;
 				}
 				displayX(3, col, "P4");
-				col+= 2;
+				col-= 1;
 			}
 		}
 		if((lines == 4) || (lines>5)) {
 			//display(4, "      ", 'l');
-			displayX(4, 6, POKER_HANDS[WIN_HAND]);
+			display(4,POKER_HANDS[WIN_HAND],'r');
 		}
 	}
 	else if(SCREEN == 10) {
@@ -367,6 +423,21 @@ void update_display() {
 		}
 
 	}
+	else if(SCREEN == 11) {
+		//win screen
+		if(BANK > 0) {
+			display(1, "WINNER WINNER", 'c');
+			display(2, "CHICKEN DINNER", 'c');
+			display(4, "Final Take:",'l');
+			sprintf(num, "%5d", BANK);
+			display(4, num, 'r');
+		} else {
+			display(1, "---- YOU LOSE ----", 'c');
+			display(3, "Try again next", 'c');
+			display(4, "time ya NERD!", 'c');
+		}
+	}
+	delete_edit();
 }
 
 void USART2_IRQHandler() {
@@ -379,7 +450,7 @@ void USART2_IRQHandler() {
 	} else if(cmd == 1) { //confirm
 		if(STATUS == 7) {
 			STATUS = 8; //meaning, full send ahead
-			EDIT = (6<<4 | 7);
+			add_edit(6<<4 | 7);
 			led(2,0); //do other LED stuff here
 
 		}
@@ -397,7 +468,7 @@ void USART2_IRQHandler() {
 		STATUS = read_int();
 		if(STATUS == 1) { //activated
 			led(1,1);
-			EDIT = (0<<4) | 7;
+			add_edit( (0<<4) | 7);
 		}
 		else if(STATUS == 3) {
 			//dealer
@@ -407,7 +478,19 @@ void USART2_IRQHandler() {
 		} else if((STATUS >= 4) & (STATUS <= 6)) {
 			led(1,0);
 			led(3,1);
-			EDIT = (0<<4 | 7);
+			add_edit(0<<4 | 7);
+		} else if(STATUS == 9) {
+			//end of game
+			if(BANK > 0) {
+				led(1,0);
+				led(2,1);
+				led(3,1);
+			} else {
+				led(1,1);
+				led(2,0);
+				led(3,0);
+			}
+			add_edit((11<<4) | 7);
 		}
 
 	} else if(cmd == 5) { //new card
@@ -430,27 +513,31 @@ void USART2_IRQHandler() {
 			COMBO[4] = fiveCardHand[3];
 			COMBO[5] = fiveCardHand[4];
 		}
+		COMBO[0] = currentHand;
+		if(H_INDEX > 2) {
 		OLD_CALL += CALL;
 		CALL = 0;
-		COMBO[0] = currentHand;
+
 		BET = 0;
 		OLD_BET = 0;
-		EDIT = ((1<<4) | 6);
+
+		}
+		add_edit((1<<4) | 6);
 
 	} else if(cmd == 6) { //pot update
 		POT = read_int();
-		EDIT = ((0<<4) | 1);
+		add_edit((0<<4) | 1);
 	} else if(cmd == 7) { //call update
 		CALL = read_int() - OLD_CALL;
-		EDIT = ((0<<4) | 2);
+		add_edit ((0<<4) | 2);
 	} else if(cmd == 8) { //bet update
 		int diff = read_int();
 		BET = diff + OLD_BET;
 		//BANK -= diff;
-		EDIT = ((0<<4) | 3);
+		add_edit((0<<4) | 3);
 	} else if(cmd == 9) { //bank update
 		BANK = read_int();
-		EDIT = ((0<<4) | 4);
+		add_edit((0<<4) | 4);
 	} else if(cmd == 10) { //send hand
 		xbee_send(0, 10, COMBO, 6);
 	} else if(cmd == 11) { //ind. results
@@ -484,7 +571,7 @@ void USART2_IRQHandler() {
 		led(2,0);
 
 		//SCREEN = 0;
-		EDIT = ((0<<4) | 7);
+		add_edit((0<<4) | 6);
 	} else if(cmd == 13) { //table results
 		WINNERS = read_int();
 		WIN_HAND = read_int();
@@ -499,7 +586,7 @@ void USART2_IRQHandler() {
 		}
 		STATUS = 7;
 
-	} else if(cmd == 14) { //open network / reset
+	} else if(cmd == 14) { //reset
 		OLD_BET = 0;
 		ROUND = 0;
 		BANK = 0;
@@ -524,10 +611,13 @@ void USART2_IRQHandler() {
 		//turn on dealer LED
 		led(2,1);
 		STATUS = 0;
-		EDIT = (10 << 4) | 7;
-	} else if(cmd == 15) { //close network
-		//MY_ADDR = read_int();
-		//STATUS = 10;
+		while(ptr != NULL) {
+			delete_edit();
+		}
+		add_edit((10 << 4) | 7);
+	} else if(cmd == 15) { //end of game
+
+
 	}
 }
 
@@ -539,9 +629,24 @@ int main(void) {
 	init_led();
 	init_btns();
 
+	char MY_ADDR = get_addr();
+	if((MY_ADDR>>4) == 1) {
+		strcpy(pnum, "ONE    ");
+	} else if((MY_ADDR>>4) == 2) {
+		strcpy(pnum, "TWO    ");
+	}else if((MY_ADDR>>4) == 3) {
+		strcpy(pnum, "THREE  ");
+	} else if((MY_ADDR>>4) == 4) {
+			strcpy(pnum, "FOUR  ");
+		}
+
 	led(2,1);
-	EDIT = (10 << 4 | 7);
+
+	add_edit(10 << 4 | 7);
+
+
 	while(1) {
 		update_display();
 	}
 }
+

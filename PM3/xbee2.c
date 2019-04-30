@@ -12,7 +12,9 @@
 
 static char MY_ADDR = 0x10;
 
-
+char get_addr() {
+	return MY_ADDR;
+}
 void nano_wait(int t) {
     asm("       mov r0,%0\n"
         "repeat:\n"

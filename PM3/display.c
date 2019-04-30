@@ -313,7 +313,7 @@ void display(int line, char* s, char mode) {
 			col = ((20 - size)/2);
 			break;
 		case 'r':
-			col = (20-size);
+			col = (19-size);
 			break;
 		default:
 			col = 0; //left default
@@ -339,7 +339,7 @@ void display(int line, char* s, char mode) {
 
 void clear_display() {
 	command(LCD_CLEARDISPLAY);
-	nano_wait(2000*1000);
+	nano_wait(100*1000*1000);
 }
 void clear_line(int l) {
 	display(l, "                    ", 'l');

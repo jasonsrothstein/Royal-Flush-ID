@@ -9,5 +9,5 @@ char xbee_read();
 char xbee_sendH(char);
 void nano_wait(int);
 
-
+char get_addr();
 #endif

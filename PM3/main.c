@@ -149,6 +149,7 @@ void TIM2_IRQHandler() {
 	if(TIM2->SR & TIM_SR_CC1IF) {
 		//BTN 2
 		//fold
+
 		if(STATUS == 6) {
 			STATUS = 0;
 			xbee_sendX(3); //request to stop
@@ -196,7 +197,7 @@ void TIM2_IRQHandler() {
 	TIM2->SR &= ~TIM_SR_UIF;
 }
 void TIM1_CC_IRQHandler() {
-	if(STATUS != 0) {
+	if(STATUS >= -1) {
 		int new_screen = SCREEN + 1;
 		if((new_screen > 7) && (new_screen < 9)) { //screen is 6-8
 			new_screen = 6;
@@ -386,14 +387,14 @@ void update_display() {
 				col-= 1;
 			}
 			if(WINNERS & 0b0010) {
-				if(col != 8) {
+				if(col != 17) {
 					displayX(3, col, "/");
 					col-= 2;
 				}
 				displayX(3, col, "P2");
 				col-= 1;
 			}if(WINNERS & 0b0100) {
-				if(col != 8) {
+				if(col != 17) {
 					displayX(3, col, "/");
 					col-= 2;
 				}
@@ -401,7 +402,7 @@ void update_display() {
 				col-= 1;
 			}
 			if(WINNERS & 0b1000) {
-				if(col != 8) {
+				if(col != 17) {
 					displayX(3, col, "/");
 					col-= 2;
 				}
@@ -438,6 +439,7 @@ void update_display() {
 		}
 	}
 	delete_edit();
+
 }
 
 void USART2_IRQHandler() {
@@ -523,6 +525,7 @@ void USART2_IRQHandler() {
 
 		}
 		add_edit((1<<4) | 6);
+		add_edit((0<<4) | 6);
 
 	} else if(cmd == 6) { //pot update
 		POT = read_int();
@@ -587,6 +590,7 @@ void USART2_IRQHandler() {
 		STATUS = 7;
 
 	} else if(cmd == 14) { //reset
+		NVIC_SystemReset();
 		OLD_BET = 0;
 		ROUND = 0;
 		BANK = 0;
@@ -628,7 +632,7 @@ int main(void) {
 	xbee_init();
 	init_led();
 	init_btns();
-
+	STATUS = -2;
 	char MY_ADDR = get_addr();
 	if((MY_ADDR>>4) == 1) {
 		strcpy(pnum, "ONE    ");

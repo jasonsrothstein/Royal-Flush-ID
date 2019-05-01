@@ -10,7 +10,7 @@
 #include "stm32f0_discovery.h"
 
 
-static char MY_ADDR = 0x10;
+static char MY_ADDR = 0x30;
 
 char get_addr() {
 	return MY_ADDR;
